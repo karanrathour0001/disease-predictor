@@ -1,8 +1,12 @@
 import streamlit as st
 import pickle
 import pandas as pd
+from rapidfuzz import fuzz
 
-st.set_page_config(page_title="Disease Predictor", page_icon="🩺")
+st.set_page_config(page_title="AI Disease Predictor", page_icon="🧠")
+
+st.title("🤖 AI Disease Predictor (Chat Style)")
+st.caption("Type your symptoms like chatting with a doctor")
 
 st.warning("⚠️ This is not a medical diagnosis. Please consult a doctor.")
 
@@ -11,77 +15,91 @@ model = pickle.load(open("model.pkl", "rb"))
 columns = pickle.load(open("columns.pkl", "rb"))
 label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
 
-st.title("🩺 Smart Disease Predictor (NLP Enabled)")
-
-# 🧠 Symptom dictionary (SMART NLP)
+# Symptom dictionary
 symptom_dict = {
-    "fever": ["fever", "high temperature", "temperature", "bukhar"],
-    "headache": ["headache", "head pain", "migraine"],
+    "fever": ["fever", "temperature", "bukhar"],
+    "headache": ["headache", "head pain"],
     "nausea": ["nausea", "feeling sick"],
     "chills": ["chills", "shivering"],
-    "sweating": ["sweating", "sweat"],
+    "sweating": ["sweating"],
     "cough": ["cough", "khansi"],
-    "breathlessness": ["breathlessness", "shortness of breath"],
-    "sore_throat": ["sore throat", "throat pain"],
-    "blurred_vision": ["blurred vision", "vision problem"],
-    "dizziness": ["dizziness", "lightheaded"],
-    "vomiting": ["vomiting", "vomit", "puke"],
-    "diarrhea": ["diarrhea", "loose motion"],
-    "abdominal_pain": ["stomach pain", "abdominal pain"],
-    "rash": ["rash", "skin rash"],
-    "joint_pain": ["joint pain", "body pain"],
-    "fatigue": ["fatigue", "weakness", "tired"],
-    "weight_loss": ["weight loss", "losing weight"],
-    "high_sugar": ["high sugar", "diabetes"],
+    "breathlessness": ["shortness of breath"],
+    "sore_throat": ["throat pain"],
+    "blurred_vision": ["vision problem"],
+    "dizziness": ["dizziness"],
+    "vomiting": ["vomit", "puke"],
+    "diarrhea": ["loose motion"],
+    "abdominal_pain": ["stomach pain"],
+    "rash": ["skin rash"],
+    "joint_pain": ["body pain"],
+    "fatigue": ["weakness", "tired"],
+    "weight_loss": ["losing weight"],
+    "high_sugar": ["diabetes"],
     "chest_pain": ["chest pain"],
-    "tiredness": ["tiredness", "exhausted"]
+    "tiredness": ["exhausted"]
 }
 
-user_input = st.text_area("Describe your symptoms (e.g., I have high temperature and headache)")
+all_words = []
+for words in symptom_dict.values():
+    all_words.extend(words)
 
-if st.button("Predict Disease"):
+# Chat UI
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    if user_input.strip() == "":
-        st.error("❌ Please enter symptoms")
+# Show chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+# User input
+prompt = st.chat_input("Describe your symptoms...")
+
+if prompt:
+    # Show user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    text = prompt.lower()
+
+    detected = []
+
+    # 🔥 Fuzzy matching
+    for key, synonyms in symptom_dict.items():
+        for word in synonyms:
+            score = fuzz.partial_ratio(word, text)
+            if score > 80:
+                detected.append(key)
+                break
+
+    # Remove duplicates
+    detected = list(set(detected))
+
+    if len(detected) == 0:
+        reply = "❌ Sorry, I couldn't detect symptoms. Try describing differently."
     else:
-        text = user_input.lower()
+        selected = detected[:3]
+        while len(selected) < 3:
+            selected.append(selected[0])
 
-        detected_symptoms = []
+        # Prepare input
+        input_data = pd.DataFrame([selected],
+                                 columns=["Symptom_1", "Symptom_2", "Symptom_3"])
 
-        # 🔍 Smart matching
-        for key, synonyms in symptom_dict.items():
-            for word in synonyms:
-                if word in text:
-                    detected_symptoms.append(key)
-                    break
+        input_encoded = pd.get_dummies(input_data)
+        input_encoded = input_encoded.reindex(columns=columns, fill_value=0)
 
-        if len(detected_symptoms) == 0:
-            st.error("❌ No symptoms detected")
-        else:
-            st.write("🧠 Detected Symptoms:", detected_symptoms)
+        probs = model.predict_proba(input_encoded)[0]
+        top_indices = probs.argsort()[-3:][::-1]
 
-            # Take max 3
-            selected = detected_symptoms[:3]
+        reply = "🧾 Possible diseases:\n"
+        for i in top_indices:
+            disease = label_encoder.inverse_transform([i])[0]
+            prob = probs[i] * 100
+            reply += f"\n👉 {disease} ({prob:.2f}%)"
 
-            # Fill if less than 3
-            while len(selected) < 3:
-                selected.append(selected[0])
-
-            # Dataframe
-            input_data = pd.DataFrame([selected],
-                                     columns=["Symptom_1", "Symptom_2", "Symptom_3"])
-
-            input_encoded = pd.get_dummies(input_data)
-            input_encoded = input_encoded.reindex(columns=columns, fill_value=0)
-
-            probs = model.predict_proba(input_encoded)[0]
-            top_indices = probs.argsort()[-3:][::-1]
-
-            st.subheader("🧾 Top Predictions:")
-
-            for i in top_indices:
-                disease_name = label_encoder.inverse_transform([i])[0]
-                probability = probs[i] * 100
-                st.write(f"👉 {disease_name} : {probability:.2f}%")
-
-            st.success("✅ Prediction complete!")
+    # Show bot reply
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+    with st.chat_message("assistant"):
+        st.write(reply)
