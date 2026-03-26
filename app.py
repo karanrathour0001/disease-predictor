@@ -3,14 +3,60 @@ import pickle
 import pandas as pd
 from rapidfuzz import fuzz
 
-st.set_page_config(page_title="AI Disease Predictor", page_icon="🧠")
+st.set_page_config(page_title="AI Disease Predictor", page_icon="🧠", layout="centered")
 
-st.title("🤖 AI Disease Predictor (Chat Style)")
-st.caption("Type your symptoms like chatting with a doctor")
+# 🎨 Custom CSS (UI MAGIC)
+st.markdown("""
+<style>
+body {
+    background-color: #0e1117;
+}
+
+.chat-container {
+    padding: 10px;
+}
+
+.user-msg {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 5px 0;
+    width: fit-content;
+    margin-left: auto;
+}
+
+.bot-msg {
+    background-color: #262730;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 5px 0;
+    width: fit-content;
+}
+
+.title {
+    text-align: center;
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    color: gray;
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# 🧠 Header
+st.markdown('<div class="title">🤖 AI Disease Predictor</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Describe your symptoms like chatting with a doctor</div>', unsafe_allow_html=True)
 
 st.warning("⚠️ This is not a medical diagnosis. Please consult a doctor.")
 
-# Load files
+# Load model
 model = pickle.load(open("model.pkl", "rb"))
 columns = pickle.load(open("columns.pkl", "rb"))
 label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
@@ -39,51 +85,45 @@ symptom_dict = {
     "tiredness": ["exhausted"]
 }
 
-all_words = []
-for words in symptom_dict.values():
-    all_words.extend(words)
-
-# Chat UI
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Show chat history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+# Display chat
+st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
-# User input
-prompt = st.chat_input("Describe your symptoms...")
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.markdown(f'<div class="user-msg">{msg["content"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="bot-msg">{msg["content"]}</div>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Input
+prompt = st.chat_input("Type your symptoms...")
 
 if prompt:
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
 
     text = prompt.lower()
-
     detected = []
 
-    # 🔥 Fuzzy matching
     for key, synonyms in symptom_dict.items():
         for word in synonyms:
-            score = fuzz.partial_ratio(word, text)
-            if score > 80:
+            if fuzz.partial_ratio(word, text) > 80:
                 detected.append(key)
                 break
 
-    # Remove duplicates
     detected = list(set(detected))
 
     if len(detected) == 0:
-        reply = "❌ Sorry, I couldn't detect symptoms. Try describing differently."
+        reply = "❌ I couldn't detect symptoms. Try again."
     else:
         selected = detected[:3]
         while len(selected) < 3:
             selected.append(selected[0])
 
-        # Prepare input
         input_data = pd.DataFrame([selected],
                                  columns=["Symptom_1", "Symptom_2", "Symptom_3"])
 
@@ -99,7 +139,5 @@ if prompt:
             prob = probs[i] * 100
             reply += f"\n👉 {disease} ({prob:.2f}%)"
 
-    # Show bot reply
     st.session_state.messages.append({"role": "assistant", "content": reply})
-    with st.chat_message("assistant"):
-        st.write(reply)
+    st.rerun()
