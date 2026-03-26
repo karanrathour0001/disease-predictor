@@ -1,20 +1,44 @@
-import os
-print(os.listdir())
-
 import streamlit as st
 import pickle
 import pandas as pd
 
-st.set_page_config(page_title="Disease Predictor", page_icon="🩺")
-st.warning("⚠️ This is not a medical diagnosis. Please consult a doctor.")
+# Page config
+st.set_page_config(page_title="Disease Predictor", page_icon="🩺", layout="centered")
 
-# Load saved files
+# Custom CSS
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7fa;
+    }
+    .title {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Load model
 model = pickle.load(open("model.pkl", "rb"))
 columns = pickle.load(open("columns.pkl", "rb"))
 label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
 
-st.title("🩺 Disease Prediction System")
-st.write("Select symptoms and get predicted disease")
+# Title
+st.markdown('<p class="title">🩺 Disease Prediction System</p>', unsafe_allow_html=True)
+
+st.warning("⚠️ This is not a medical diagnosis. Consult a doctor.")
+
+# Card start
+st.markdown('<div class="card">', unsafe_allow_html=True)
 
 # Symptoms list
 symptoms_list = [
@@ -27,40 +51,50 @@ symptoms_list = [
     "chest_pain", "tiredness"
 ]
 
-# User input
-symptom1 = st.selectbox("Select Symptom 1", symptoms_list)
-symptom2 = st.selectbox("Select Symptom 2", symptoms_list)
-symptom3 = st.selectbox("Select Symptom 3", symptoms_list)
+# Layout columns
+col1, col2, col3 = st.columns(3)
 
-# Predict button
-if st.button("Predict Disease"):
+with col1:
+    symptom1 = st.selectbox("Symptom 1", symptoms_list)
 
-    # Check duplicate symptoms
+with col2:
+    symptom2 = st.selectbox("Symptom 2", symptoms_list)
+
+with col3:
+    symptom3 = st.selectbox("Symptom 3", symptoms_list)
+
+# Button centered
+predict = st.button("🔍 Predict Disease")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Prediction
+if predict:
+
     if len(set([symptom1, symptom2, symptom3])) < 3:
-        st.error("Please select 3 different symptoms")
+        st.error("⚠️ Please select 3 different symptoms")
 
     else:
-        # Create input dataframe
         input_data = pd.DataFrame([[symptom1, symptom2, symptom3]],
                                   columns=["Symptom_1", "Symptom_2", "Symptom_3"])
 
-        # One-hot encoding
         input_encoded = pd.get_dummies(input_data)
-
-        # Match training columns
         input_encoded = input_encoded.reindex(columns=columns, fill_value=0)
 
-        # 🔥 Prediction with probability
         probs = model.predict_proba(input_encoded)[0]
-
-        # Top 3 predictions
         top_indices = probs.argsort()[-3:][::-1]
 
-        st.subheader("Top Predictions:")
+        st.markdown("### 🧠 Prediction Results")
 
         for i in top_indices:
             disease_name = label_encoder.inverse_transform([i])[0]
             probability = probs[i] * 100
-            st.write(f"{disease_name} : {probability:.2f}%")
 
-        st.success("Prediction complete!")
+            st.markdown(f"""
+                <div class="card">
+                    <h4>{disease_name}</h4>
+                    <p>Probability: <b>{probability:.2f}%</b></p>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.success("✅ Prediction Complete!")
