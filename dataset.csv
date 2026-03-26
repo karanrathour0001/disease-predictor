@@ -1,0 +1,11 @@
+Symptom_1,Symptom_2,Symptom_3,Disease
+fever,headache,nausea,Malaria
+fever,chills,sweating,Malaria
+cough,fever,breathlessness,COVID-19
+cough,fever,sore_throat,Flu
+headache,blurred_vision,dizziness,Migraine
+vomiting,diarrhea,abdominal_pain,Food_Poisoning
+fever,rash,joint_pain,Dengue
+fatigue,weight_loss,high_sugar,Diabetes
+chest_pain,breathlessness,sweating,Heart_Attack
+fever,cough,tiredness,Tuberculosis
